@@ -1,0 +1,44 @@
+# Build directories
+build/
+build-*/
+out/
+cmake-build-*/
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+Testing/
+_deps/
+CTestTestfile.cmake
+compile_commands.json
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.pdb
+*.exe
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+.cache/
+.clangd/
+
+# Test / bench output
+Testing/Temporary/
+bench-results/
+
+# Soak run output — captured summaries live in soak/README.md instead
+soak-*.log

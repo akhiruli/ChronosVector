@@ -1,0 +1,109 @@
+# ChronosVector CI — matrix build across macOS + Linux × four sanitizer configs.
+#
+# Mirrors docker/verify_linux.sh but runs on GitHub-hosted runners. On PRs and
+# pushes to main. Cancels superseded runs on the same branch so a rapid-fire
+# push doesn't burn CI budget.
+#
+# Every commit runs:
+#   macOS ARM (macos-latest)   : Debug, Release, Debug+ASan, Debug+TSan
+#   Linux x86_64 (ubuntu-latest): Debug, Release, Debug+ASan, Debug+TSan
+#
+# The `test_phase2_integration` cases set ASAN_OPTIONS/TSAN_OPTIONS to
+# suppress a well-known false positive in RocksDB's internal std::vector
+# operations (see tests/CMakeLists.txt for why); other sanitizer checks
+# remain active.
+#
+# CI does NOT run:
+#   - The 24 h soak (Phase 2 signoff artifact — run manually or on a
+#     dedicated schedule).
+#   - Benchmarks (Phase 3 concern — will add a bench-regression gate when
+#     baselines are recorded).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - "_db/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - "_db/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.config }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        config:
+          - Debug
+          - Release
+          - Debug+ASan
+          - Debug+TSan
+        include:
+          # Map the friendly config name to concrete CMake flags.
+          - config: Debug
+            build_type: Debug
+            cmake_extra: ""
+          - config: Release
+            build_type: Release
+            cmake_extra: ""
+          - config: Debug+ASan
+            build_type: Debug
+            cmake_extra: "-DCHRONOSV_ENABLE_ASAN=ON"
+          - config: Debug+TSan
+            build_type: Debug
+            cmake_extra: "-DCHRONOSV_ENABLE_TSAN=ON"
+
+    steps:
+      - name: Checkout (with Eigen submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install RocksDB (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librocksdb-dev
+
+      - name: Install RocksDB (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update >/dev/null
+          brew install rocksdb
+
+      - name: Print toolchain versions
+        run: |
+          cmake --version
+          if command -v g++ >/dev/null; then g++ --version | head -1; fi
+          if command -v clang++ >/dev/null; then clang++ --version | head -1; fi
+          if command -v c++ >/dev/null; then c++ --version | head -1; fi
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            ${{ matrix.cmake_extra }}
+
+      - name: Build
+        # -j 2 keeps peak memory under CI runner limits (7 GB on ubuntu-latest,
+        # 14 GB on macos-latest arm64 — Debug + Catch2 can spike per process).
+        run: cmake --build build -j 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120

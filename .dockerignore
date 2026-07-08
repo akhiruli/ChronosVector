@@ -1,0 +1,28 @@
+# Files not needed for the Linux verification build.
+# Keeps Docker context small (large context = slow `docker build`).
+
+# Local build outputs from macOS.
+build/
+build-*/
+out/
+cmake-build-*/
+
+# Git internals — we don't run git operations inside the container.
+# The Eigen submodule content is still present because it's a real dir on disk.
+.git/
+.gitignore
+
+# Editor / IDE / OS junk.
+.vscode/
+.idea/
+.cache/
+.clangd/
+.DS_Store
+*.swp
+*.swo
+
+# Session tooling (Claude Code local files).
+.claude/
+
+# NOTE: `docker/` IS copied into the container — Dockerfile.linux invokes
+# build_and_test.sh at build time. Do not exclude it.

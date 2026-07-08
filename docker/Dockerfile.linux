@@ -1,0 +1,60 @@
+# ChronosVector — Linux verification build.
+#
+# Builds the library under four configurations (Release, Debug, Debug+ASan,
+# Debug+TSan) and runs the full test suite under each. The `docker build`
+# fails if any configuration fails to compile or if any test fails, giving
+# a clear pass/fail signal.
+#
+# Not used for shipping — this is purely for the maintainer to verify that
+# Phase 1 code works on Linux from a macOS dev box.
+#
+# Usage:
+#   From repo root:
+#     ./docker/verify_linux.sh              # ARM64 native (fast)
+#     ./docker/verify_linux.sh --x86        # x86_64 via Rosetta (slower)
+#
+#   Or directly:
+#     docker build -f docker/Dockerfile.linux -t chronosv-linux-verify .
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Ubuntu 24.04 ships GCC 13 (C++23-capable), CMake 3.28, and RocksDB 8.x
+# (as librocksdb-dev). We don't install
+# clang here because a single compiler is enough for maintainer-side
+# verification; CI (once wired) will cover the GCC/Clang matrix.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        ca-certificates \
+        librocksdb-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# Print versions so the build log records exactly what we're testing against.
+RUN cmake --version && g++ --version && ldd --version | head -1 \
+ && dpkg -s librocksdb-dev 2>/dev/null | grep '^Version:' || true
+
+WORKDIR /src
+
+# Copy the repo. The Eigen submodule must be populated on the host before
+# building (`.dockerignore` excludes .git so we can't init inside the
+# container). If it's missing, CMake will fail with a clear error message.
+COPY . .
+
+# Sanity-check the submodule is present before we start any config work.
+RUN test -f third_party/eigen/Eigen/Core \
+ || (echo "ERROR: third_party/eigen/Eigen/Core not found." >&2 \
+  && echo "Run 'git submodule update --init --recursive' on the host and try again." >&2 \
+  && exit 1)
+
+# Build + test all four configurations. Splitting into RUN steps gives
+# incremental Docker layer caching if you iterate.
+RUN /src/docker/build_and_test.sh release "-DCMAKE_BUILD_TYPE=Release"
+RUN /src/docker/build_and_test.sh debug   "-DCMAKE_BUILD_TYPE=Debug"
+RUN /src/docker/build_and_test.sh asan    "-DCMAKE_BUILD_TYPE=Debug -DCHRONOSV_ENABLE_ASAN=ON"
+RUN /src/docker/build_and_test.sh tsan    "-DCMAKE_BUILD_TYPE=Debug -DCHRONOSV_ENABLE_TSAN=ON"
+
+# Final summary — a `docker run` will re-print this.
+CMD ["echo", "ChronosVector Linux verification: all four configs green."]

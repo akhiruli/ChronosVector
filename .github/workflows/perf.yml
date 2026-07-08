@@ -1,0 +1,103 @@
+# ChronosVector performance visibility.
+#
+# Runs on push/PR against main. NOT a hard gate — GitHub-hosted shared
+# runners have ~20% variance on identical workloads (design §13.3), so
+# gating on absolute numbers produces false positives. Instead:
+#
+#   1. Build Release + bench.
+#   2. Run bench_engine (the end-to-end story that matters most).
+#   3. Emit numbers to the run log (grep-able).
+#   4. Upload the raw JSON as an artifact so a maintainer can compare
+#      against the last known-good result committed in bench/baselines/.
+#
+# When (if) a dedicated bare-metal runner is provisioned, this workflow
+# graduates to a hard gate with ≥10% regression blocking merge. Until
+# then, it's perf visibility — you see the number in every PR but
+# nothing red is blocking.
+
+name: perf
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - "_db/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - "_db/**"
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench-engine:
+    name: bench_engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install RocksDB (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librocksdb-dev
+
+      - name: Install RocksDB (macOS)
+        if: runner.os == 'macOS'
+        run: brew install rocksdb
+
+      - name: Configure Release + bench
+        run: |
+          cmake -S . -B build-rel \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCHRONOSV_BUILD_BENCH=ON \
+            -DCHRONOSV_BUILD_TESTS=OFF
+
+      - name: Build bench_engine
+        run: cmake --build build-rel --target bench_engine -j 2
+
+      - name: Run bench_engine (5 repetitions, median-of-means)
+        run: |
+          ./build-rel/bench/bench_engine \
+            --benchmark_min_time=0.3s \
+            --benchmark_repetitions=5 \
+            --benchmark_report_aggregates_only=true \
+            --benchmark_out=bench-engine.json \
+            --benchmark_out_format=json \
+            --benchmark_time_unit=us
+          echo "---"
+          echo "Key metrics (median across 5 runs):"
+          grep -E '"name"|"real_time"' bench-engine.json | head -80
+
+      - name: Upload bench JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-engine-${{ matrix.os }}-${{ github.sha }}
+          path: bench-engine.json
+          retention-days: 30
+
+      # Placeholder for the future hard gate. Uncomment when a dedicated
+      # runner is available and update the threshold + comparison script.
+      #
+      # - name: Compare against baseline
+      #   run: |
+      #     python3 tools/compare_bench.py \
+      #       --baseline bench/baselines/${{ matrix.os }}.json \
+      #       --current  bench-engine.json \
+      #       --threshold 0.10 \
+      #       --fail-on-regression
