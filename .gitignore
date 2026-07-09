@@ -40,5 +40,6 @@ compile_commands.json
 Testing/Temporary/
 bench-results/
 
-# Soak run output — captured summaries live in soak/README.md instead
+# Soak / smoke-test run output — captured summaries live in soak/README.md instead
 soak-*.log
+smoke-*.log

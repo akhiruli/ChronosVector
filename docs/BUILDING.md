@@ -423,14 +423,14 @@ ChronosVector/
 │   ├── storage_backend.h       # internal — cold-tier abstract iface
 │   └── types.h                 # internal — shared PODs
 ├── src/
-│   ├── engine.cpp              # engine core + extern "C" wall
-│   ├── eviction.cpp            # background eviction jthread + flush
-│   ├── storage_rocksdb.cpp     # default StorageBackend impl
+│   ├── engine.cpp              # engine core + extern "C" wall + eviction jthread
+│   ├── storage_rocksdb.{cpp,h} # default StorageBackend impl
 │   ├── block_codec.{cpp,h}     # binary block format
 │   └── kernels.{cpp,h}         # Eigen SIMD distance kernels (f32 + i8)
 ├── tests/                      # 131 tests, Catch2
 │   ├── test_ring_buffer.cpp
 │   ├── test_kernels.cpp
+│   ├── test_kernels_int8.cpp
 │   ├── test_engine.cpp
 │   ├── test_storage_backend.cpp
 │   ├── test_storage_rocksdb.cpp
@@ -440,7 +440,7 @@ ChronosVector/
 │   ├── bench_ring.cpp
 │   ├── bench_kernels.cpp
 │   ├── bench_engine.cpp        # includes BM_AppendLatencyDist for P99 diagnostics
-│   ├── bench_compare.cpp       # ChronosVector vs hnswlib (Phase 3)
+│   ├── bench_compare.cpp       # ChronosVector vs hnswlib
 │   └── baselines/              # checked-in macOS + Linux JSON references
 ├── examples/
 │   ├── chronosv_cli.cpp        # debug REPL
@@ -449,8 +449,11 @@ ChronosVector/
 │   ├── soak_test.cpp           # long-running load + flat-RSS check
 │   └── README.md               # workload table, measured results
 ├── docker/
-│   ├── verify_linux.sh         # cross-verify on Ubuntu 24.04
-│   └── capture_baseline.sh     # (re)generate Linux bench baseline
+│   ├── Dockerfile.linux        # Ubuntu 24.04 build recipe
+│   ├── build_and_test.sh       # container-side helper: build all configs + ctest
+│   ├── verify_linux.sh         # host-side wrapper: cross-verify on Ubuntu 24.04
+│   ├── capture_baseline.sh     # (re)generate Linux bench baseline
+│   └── README.md               # docker workflow notes
 ├── .github/workflows/
 │   ├── ci.yml                  # matrix build + tests
 │   └── perf.yml                # bench_engine visibility (not gated)
@@ -490,19 +493,7 @@ CXX=g++-13   cmake -S . -B build-gcc  ...
 CXX=clang++  cmake -S . -B build-clang ...
 ```
 
----
-
-## 9. Phase status
-
-- **Phase 1** ✓ — Ring + kernels + engine core + 15-primitive C ABI. All 15 primitives return real values (no `CHRONOSV_ERR_UNSUPPORTED` for `chronosv_open`/`chronosv_flush` anymore since Phase 2 landed).
-- **Phase 2** ✓ — RocksDB storage backend, `StorageBackend` abstract interface, background eviction jthread with async flush, `chronosv_open` recovery with metadata verification, corruption handling, Phase 2 integration tests.
-- **Phase 3** ✓ — INT8 kernels (opt-in), competitor comparison bench vs hnswlib, CI perf visibility, checked-in baselines.
-- **Phase 4** ✓ — Doxygen on public headers, second example (`anomaly_stream`), README polish, 6h soak validation at 10 kHz, v0.1 tag.
-- **Phase 5** *(optional, deferred)* — gRPC sidecar (`chronosvd`) if users ask.
-
----
-
-## 10. Getting help
+## 9. Getting help
 
 - **API questions**: read `include/chronosv/chronos_vector.h` — the header comments are the API reference, with full Doxygen tags for LSP hover.
 - **Bug reports**: file an issue on the project's GitHub repository. See `CONTRIBUTING.md` for PR guidelines.

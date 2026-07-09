@@ -2,7 +2,7 @@
   "context": {
     "date": "2026-07-02T12:20:36+05:30",
     "host_name": "J19T69H900",
-    "executable": "/Users/akhirul.islam/ChronosVector/build-rel/bench/bench_engine",
+    "executable": "./build-rel/bench/bench_engine",
     "num_cpus": 8,
     "mhz_per_cpu": 24,
     "cpu_scaling_enabled": false,

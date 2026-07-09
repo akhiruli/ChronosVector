@@ -29,7 +29,6 @@
 #include <new>
 #include <random>
 #include <shared_mutex>
-#include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -275,7 +274,7 @@ using SensorMap = std::unordered_map<std::string, std::unique_ptr<SensorSlot>,
  * without corrupting a block that's still being persisted.
  *
  * INVARIANTS:
- *   - SINGLE-WRITER: only the engine's eviction jthread touches this. It
+ *   - SINGLE-WRITER: only the engine's eviction thread touches this. It
  *     handles multiple sensors sequentially in one pass. If eviction ever
  *     goes parallel-per-sensor, this needs to become per-sensor scratch or
  *     grow a mutex. Neither is on the roadmap.
@@ -483,11 +482,11 @@ public:
     /* ---- Lifecycle ---- */
 
     chronosv_error_t Close() noexcept {
-        // Signal the eviction thread to stop and wake it. jthread's dtor
-        // will join, but Close is idempotent — we can be called multiple
-        // times. Once closed, subsequent API entry points reject with CLOSED.
+        // Signal the eviction thread to stop and wake it. Close is idempotent
+        // — we can be called multiple times. Once closed, subsequent API
+        // entry points reject with CLOSED.
         if (!closed_.exchange(true, std::memory_order_acq_rel)) {
-            eviction_thread_.request_stop();
+            stop_requested_.store(true, std::memory_order_release);
             {
                 std::unique_lock<std::mutex> lock(eviction_mu_);
                 eviction_cv_.notify_all();
@@ -985,26 +984,34 @@ private:
     }
 
     void StartEvictionThread() {
-        // One jthread per engine, wakes every eviction_interval_ms, trims
-        // tail past entries older than (max_ts_seen - window_duration_ms),
+        // One background thread per engine, wakes every eviction_interval_ms,
+        // trims tail past entries older than (max_ts_seen - window_duration_ms),
         // and copies the evicted range to the backend before advancing tail.
-        eviction_thread_ = std::jthread([this](std::stop_token stop) {
-            EvictionLoop(stop);
+        //
+        // Uses std::thread + std::atomic<bool> instead of std::jthread /
+        // std::stop_token: those are C++20 but libc++ on Apple platforms
+        // has been slow to ship them (missing in AppleClang as of Xcode
+        // 16.x). std::thread is portable across every C++20 stdlib.
+        eviction_thread_ = std::thread([this]() {
+            EvictionLoop();
         });
     }
 
-    void EvictionLoop(std::stop_token stop) noexcept {
-        while (!stop.stop_requested()) {
+    void EvictionLoop() noexcept {
+        while (!stop_requested_.load(std::memory_order_acquire)) {
             {
                 std::unique_lock<std::mutex> lock(eviction_mu_);
-                // condition_variable_any::wait_for with stop_token predicate:
-                // returns early if stop is requested or notify is called.
+                // Wait for either the interval to elapse OR Close() to
+                // signal stop_requested_ (notify_all is called from Close
+                // right after the store, so the predicate will observe it).
                 eviction_cv_.wait_for(
-                    lock, stop,
+                    lock,
                     std::chrono::milliseconds(cfg_.eviction_interval_ms),
-                    [] { return false; });
+                    [this] {
+                        return stop_requested_.load(std::memory_order_acquire);
+                    });
             }
-            if (stop.stop_requested()) return;
+            if (stop_requested_.load(std::memory_order_acquire)) return;
             try {
                 EvictOnce();
             } catch (...) {
@@ -1028,7 +1035,7 @@ private:
      * by Flush). Any positive override is honored as-is.
      *
      * SERIALIZATION: eviction_pass_mu_ ensures only one EvictOnce runs at
-     * a time across (a) the background eviction jthread and (b) concurrent
+     * a time across (a) the background eviction thread and (b) concurrent
      * chronosv_flush calls from user threads. Both share evict_scratch_,
      * which is single-writer by contract — the mutex enforces it.
      * Contention is bounded (eviction is cold path, flush is rare). */
@@ -1477,11 +1484,13 @@ private:
     std::mutex eviction_pass_mu_;
 
     /* Eviction worker. Must be declared LAST so it destructs FIRST — the
-     * jthread dtor requests stop and joins, and we want that to happen
-     * before sensors_ / map_mutex_ / backend_ start tearing down. */
+     * thread dtor terminates on a joinable thread, so Close() (which joins)
+     * must run before sensors_ / map_mutex_ / backend_ start tearing down.
+     * The ~Engine destructor calls Close() to enforce this ordering. */
     std::mutex                 eviction_mu_;
-    std::condition_variable_any eviction_cv_;
-    std::jthread               eviction_thread_;
+    std::condition_variable    eviction_cv_;
+    std::atomic<bool>          stop_requested_{false};
+    std::thread                eviction_thread_;
 };
 
 inline Engine* to_engine(chronosv_engine_t* h) noexcept {
