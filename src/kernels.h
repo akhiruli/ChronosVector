@@ -32,11 +32,16 @@ float L2NormF32(const float* v, std::size_t dim) noexcept;
  * specially (all-zero q, cosine=0 result).
  *
  * Memory: `int8_t q[dim]` + `float scale` per vector — ~4x smaller than
- * float32. The primary benefit is bounded-RAM reduction; a SIMD int8
- * dot-product path (for compute speedup) is a future optimization.
+ * float32. The primary benefit is bounded-RAM reduction and 2.5-4.5x
+ * query-time speedup from reduced memory bandwidth; a hand-tuned SIMD
+ * int8 dot-product path (for further compute speedup) is a future
+ * optimization.
  *
- * Accuracy: measured ~1-2% cosine-similarity delta vs float32 on typical
- * embeddings (dim 128-1024, unit-normalized or otherwise).
+ * Accuracy: measured Recall@10 drop vs FP32:
+ *   -0.66 pp on 384-dim unit-normalized text embeddings (MiniLM/BERT)
+ *   -3.09 pp on 128-dim raw visual descriptors (SIFT-1M)
+ * See docs/INT8.md for the full measured story and tests/int8_recall/
+ * for the validation harness (works on user's own embeddings).
  * -------------------------------------------------------------------------- */
 
 /* Quantize a float32 vector to int8 + scale. Writes `dim` int8 values to

@@ -2,7 +2,7 @@
 
 An embeddable C++23 **sliding-window vector store** for streaming time-series embeddings. Lock-free ring buffer in RAM, SIMD distance math via Eigen, RocksDB-backed cold tier. Bounded memory, predictable latency, no garbage collection.
 
-- **Status:** v0.1 preview. Core engine, RocksDB persistence + recovery, INT8 kernels (opt-in), competitor benchmarks vs hnswlib, CI perf visibility. 131 tests green on macOS ARM64 and Linux ARM64 under Debug / Release / ASan / TSan / UBSan. 6-hour soak validated at 10 kHz sustained ingest.
+- **Status:** v0.1 preview. Core engine, RocksDB persistence + recovery, INT8 quantized storage (validated on SIFT-1M + BERT — see [`docs/INT8.md`](docs/INT8.md)), competitor benchmarks vs hnswlib, CI perf visibility. 140 tests green on macOS ARM64 and Linux ARM64 under Debug / Release / ASan / TSan / UBSan. 6-hour soak validated at 10 kHz sustained ingest.
 - **License:** Apache-2.0 — permanent, no BSL/SSPL rug-pull ever (see [design decisions](#license-commitments)).
 
 ---
@@ -152,7 +152,7 @@ C++ users get a header-only RAII wrapper via `chronosv/chronos_vector.hpp` — z
 | Sustained append throughput at dim=128 | ≥ 50k/sec | **~21 M/sec** |
 | RSS growth over 6-hour soak vs steady baseline | ≤ 5% | **+2.26%** ✓ (at 10 kHz × 128-dim sustained ingest; see [`soak/README.md`](soak/README.md)) |
 
-At 100k × 128 float32 the query is memory-bandwidth-bound (~1.3 ms end-to-end vs the < 1 ms target); INT8 quantization (opt-in via `CHRONOSV_ENABLE_INT8`) cuts that to fit the target at the cost of ~1% recall drift. Full raw JSON in `bench/baselines/`.
+At 100k × 128 float32 the query is memory-bandwidth-bound (~1.3 ms end-to-end vs the < 1 ms target); INT8 quantization (`cfg.storage_dtype = CHRONOSV_DTYPE_INT8`, compiled by default) cuts memory ~4× and query latency 2.6–4.5× at 0.7–3 pp recall drop depending on embedding type — see [`docs/INT8.md`](docs/INT8.md) for measured numbers. Full raw JSON in `bench/baselines/`.
 
 **Append tail latency was a specific hardening focus.** Prefetching the next ring slot in `SensorRing::Append` dropped dim=512 P99 from 16× median to 1.6× median; see `bench/bench_engine.cpp::BM_AppendLatencyDist` and `bench/baselines/README.md` for the diagnostic pattern.
 
@@ -169,13 +169,15 @@ Three layers:
 ```
 include/chronosv/            Public C ABI (chronos_vector.h) + C++ wrapper (.hpp) + metrics_sink.h
 src/                         Engine, kernels, block codec, RocksDB backend (internal)
-tests/                       131 unit + integration tests, Catch2
+tests/                       140 unit + integration tests, Catch2 (incl. INT8 kernels)
+tests/int8_recall/           Opt-in INT8 recall validation harness (SIFT-1M + BERT)
 bench/                       bench_ring, bench_kernels, bench_engine, bench_compare (google/benchmark)
 bench/baselines/             Committed macOS + Linux JSON baselines
 examples/chronosv_cli.cpp    Debug REPL
 examples/anomaly_stream.cpp  Walkthrough: streaming anomaly detection + metrics sink
 soak/                        Long-running load + flat-RSS check
 docs/BUILDING.md             Full build / test / bench / soak guide
+docs/INT8.md                 INT8 quantized storage: when to use + measured recall/perf
 docker/                      Linux verification via Docker Desktop
 third_party/eigen/           Vendored git submodule, pinned to 3.4.0
 ```
@@ -186,7 +188,7 @@ A few facts about the current release that don't fit anywhere else, in decreasin
 
 - **`chronosv_query_range` reads the hot window only.** If you ask for a time range that extends before the oldest in-memory entry, you get back the partial hot result plus a `CHRONOSV_WARN_RANGE_TRUNCATED` warning. Older data lives on disk but there's no built-in cold-tier range reader yet — planned post-v0.1.
 
-- **INT8 storage is behind a build flag.** Configure with `-DCHRONOSV_ENABLE_INT8=ON` to enable. Kernels are shipped and tested; the flag exists because we haven't validated INT8 on production workloads outside synthetic benchmarks yet. Requesting `CHRONOSV_DTYPE_INT8` without the flag returns `CHRONOSV_ERR_UNSUPPORTED`.
+- **INT8 storage** compiles in by default and is opt-in at runtime via `cfg.storage_dtype = CHRONOSV_DTYPE_INT8`. Measured on real embeddings: **~0.7 pp recall drop** on BERT/MiniLM at 384-dim (essentially free) and ~3.1 pp drop on SIFT-1M at 128-dim (safe with FP32 rerank). ~4× memory reduction and ~2.5–4.5× query speedup depending on corpus size. Full measured numbers, when-to-use guidance, and a validation harness for your own embeddings in [`docs/INT8.md`](docs/INT8.md).
 
 - **Reading memory numbers:** `phys_footprint` (macOS) / `RssAnon` (Linux) oscillates in a bounded band around a steady baseline — the memtable fill/flush cycle is inherent to RocksDB. The soak PASS gate at +5% growth vs baseline (measured +2.26% in the shipping build) reflects that reality; expect ~30-50 MiB swings within the band on any typical workload.
 

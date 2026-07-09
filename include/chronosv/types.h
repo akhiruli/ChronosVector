@@ -73,10 +73,15 @@ typedef int32_t chronosv_error_t;
 /**
  * @brief Storage dtype for the ring buffer.
  *
- * ::CHRONOSV_DTYPE_INT8 requires the `CHRONOSV_ENABLE_INT8` compile flag;
- * runtime rejection is ::CHRONOSV_ERR_UNSUPPORTED when disabled. INT8 trades
- * ~1% accuracy loss (per-vector symmetric quantization) for 4× memory
- * reduction and often better throughput on memory-bandwidth-bound queries.
+ * ::CHRONOSV_DTYPE_INT8 is compiled in by default (`CHRONOSV_ENABLE_INT8=ON`).
+ * If the library was built with the flag explicitly OFF, requesting INT8
+ * at engine construction returns ::CHRONOSV_ERR_UNSUPPORTED.
+ *
+ * INT8 trades a small accuracy loss (measured 0.7 pp Recall@10 on BERT
+ * embeddings, 3.1 pp on SIFT-1M) for ~4× memory reduction and 2.5–4.5×
+ * query speedup on memory-bandwidth-bound workloads. See `docs/INT8.md`
+ * for when-to-use guidance and the validation harness at
+ * `tests/int8_recall/` for measuring recall on your own embeddings.
  */
 typedef enum chronosv_dtype_t {
     CHRONOSV_DTYPE_FLOAT32 = 0,  /**< 32-bit float. Default. */

@@ -104,7 +104,8 @@ cmake --build build-ubsan -j
 | `CHRONOSV_BUILD_BENCH` | `OFF` | Build benchmarks |
 | `CHRONOSV_BUILD_EXAMPLES` | `OFF` | Build the CLI + any example programs |
 | `CHRONOSV_BUILD_SOAK` | `OFF` | Build the long-running soak test (see §5.8) |
-| `CHRONOSV_ENABLE_INT8` | `OFF` | Enable INT8 quantized storage path (kernels shipped in Phase 3; opt-in until validated at scale) |
+| `CHRONOSV_ENABLE_INT8` | `ON` | Compile INT8 quantized storage path (users opt in at runtime via `cfg.storage_dtype`). See [`docs/INT8.md`](INT8.md) for measured recall numbers |
+| `CHRONOSV_BUILD_INT8_RECALL` | `OFF` | Build INT8 recall validation harness (needs external data — see `tests/int8_recall/README.md`) |
 | `CHRONOSV_ENABLE_ASAN` | `OFF` | AddressSanitizer |
 | `CHRONOSV_ENABLE_TSAN` | `OFF` | ThreadSanitizer |
 | `CHRONOSV_ENABLE_UBSAN` | `OFF` | UndefinedBehaviorSanitizer |
@@ -137,7 +138,7 @@ Internal headers (`ring_buffer.h`, `types.h`, `kernels.h`) are deliberately not 
 ctest --test-dir build --output-on-failure
 ```
 
-Expected: `100% tests passed, 0 tests failed out of 131` (some death tests only run in Debug).
+Expected: `100% tests passed, 0 tests failed out of 140` (some death tests only run in Debug).
 
 ### 4.2 Under sanitizers
 
@@ -182,7 +183,7 @@ Available tags include `[ring]`, `[kernel]`, `[engine]`, `[cosine]`, `[euclidean
 | `test_storage_rocksdb` | Open/close/round-trip/DropSensor/persistence/corruption injection/ListSensors/metadata via RocksDB tempdir |
 | `test_phase2_integration` | N-producer + eviction under sustained load; concurrent flush is idempotent; chronosv_open survives a corrupt persisted block |
 
-Total: 131 tests across all executables. Individual counts drift as tests are added; use `ctest -N` for the current tally.
+Total: 140 tests across all executables. Individual counts drift as tests are added; use `ctest -N` for the current tally.
 
 ---
 
@@ -414,7 +415,8 @@ ChronosVector/
 ├── .gitignore
 ├── .gitmodules                 # eigen submodule
 ├── docs/
-│   └── BUILDING.md             # this file
+│   ├── BUILDING.md             # this file
+│   └── INT8.md                 # INT8 storage: when to use + measured recall/perf
 ├── include/chronosv/
 │   ├── chronos_vector.h        # PUBLIC — the C ABI contract
 │   ├── chronos_vector.hpp      # PUBLIC — header-only C++ wrapper
@@ -423,11 +425,11 @@ ChronosVector/
 │   ├── storage_backend.h       # internal — cold-tier abstract iface
 │   └── types.h                 # internal — shared PODs
 ├── src/
-│   ├── engine.cpp              # engine core + extern "C" wall + eviction jthread
+│   ├── engine.cpp              # engine core + extern "C" wall + eviction thread
 │   ├── storage_rocksdb.{cpp,h} # default StorageBackend impl
 │   ├── block_codec.{cpp,h}     # binary block format
 │   └── kernels.{cpp,h}         # Eigen SIMD distance kernels (f32 + i8)
-├── tests/                      # 131 tests, Catch2
+├── tests/                      # 140 tests, Catch2
 │   ├── test_ring_buffer.cpp
 │   ├── test_kernels.cpp
 │   ├── test_kernels_int8.cpp
@@ -435,7 +437,13 @@ ChronosVector/
 │   ├── test_storage_backend.cpp
 │   ├── test_storage_rocksdb.cpp
 │   ├── test_block_codec.cpp
-│   └── test_phase2_integration.cpp
+│   ├── test_phase2_integration.cpp
+│   └── int8_recall/            # opt-in INT8 recall harness (needs external data)
+│       ├── test_int8_recall.cpp
+│       ├── prepare_sift1m.sh
+│       ├── prepare_bert.py
+│       ├── CMakeLists.txt
+│       └── README.md
 ├── bench/
 │   ├── bench_ring.cpp
 │   ├── bench_kernels.cpp

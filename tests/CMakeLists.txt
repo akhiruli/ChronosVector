@@ -36,10 +36,10 @@ add_executable(test_block_codec test_block_codec.cpp)
 target_link_libraries(test_block_codec PRIVATE chronosv Catch2::Catch2WithMain)
 target_include_directories(test_block_codec PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-# INT8 kernel tests — built only when CHRONOSV_ENABLE_INT8=ON. The kernels
-# themselves are always compiled into libchronosv (they don't add runtime
-# cost when unused), but the tests assume you're exercising them so we
-# gate on the flag to make the "did I enable INT8" story explicit in CI.
+# INT8 kernel tests — built only when CHRONOSV_ENABLE_INT8=ON (the default).
+# The engine gates INT8 with `#ifndef CHRONOSV_ENABLE_INT8` and returns
+# CHRONOSV_ERR_UNSUPPORTED at runtime if a downstream build explicitly
+# turns the flag off. These tests exercise the ON path.
 # NOTE: catch_discover_tests() call is deferred to the discovery block below
 # (after include(Catch)).
 if(CHRONOSV_ENABLE_INT8)

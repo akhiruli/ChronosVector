@@ -15,11 +15,12 @@ endif()
 
 # ---- Options ---------------------------------------------------------------
 
-option(CHRONOSV_BUILD_TESTS    "Build unit + integration tests" ON)
-option(CHRONOSV_BUILD_BENCH    "Build benchmarks"               OFF)
-option(CHRONOSV_BUILD_EXAMPLES "Build examples"                 OFF)
-option(CHRONOSV_BUILD_SOAK     "Build long-running soak test"   OFF)
-option(CHRONOSV_ENABLE_INT8    "Enable INT8 quantized storage"  OFF)
+option(CHRONOSV_BUILD_TESTS         "Build unit + integration tests"                    ON)
+option(CHRONOSV_BUILD_BENCH         "Build benchmarks"                                  OFF)
+option(CHRONOSV_BUILD_EXAMPLES      "Build examples"                                    OFF)
+option(CHRONOSV_BUILD_SOAK          "Build long-running soak test"                      OFF)
+option(CHRONOSV_BUILD_INT8_RECALL   "Build INT8 recall harness (needs external data)"  OFF)
+option(CHRONOSV_ENABLE_INT8         "Enable INT8 quantized storage path"                ON)
 option(CHRONOSV_ENABLE_ASAN    "AddressSanitizer"               OFF)
 option(CHRONOSV_ENABLE_TSAN    "ThreadSanitizer"                OFF)
 option(CHRONOSV_ENABLE_UBSAN   "UBSanitizer"                    OFF)
@@ -135,6 +136,10 @@ endif()
 
 if(CHRONOSV_BUILD_SOAK)
     add_subdirectory(soak)
+endif()
+
+if(CHRONOSV_BUILD_INT8_RECALL)
+    add_subdirectory(tests/int8_recall)
 endif()
 
 # ---- Install ---------------------------------------------------------------

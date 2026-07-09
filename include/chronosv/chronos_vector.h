@@ -92,7 +92,7 @@ const char* chronosv_version_string(void);
  * @retval NULL + ::CHRONOSV_ERR_INVALID_ARG  Null cfg, zero dim, bad abi_version.
  * @retval NULL + ::CHRONOSV_ERR_OOM          Backing allocation failed.
  * @retval NULL + ::CHRONOSV_ERR_IO           `cold_path` provided but RocksDB open failed.
- * @retval NULL + ::CHRONOSV_ERR_UNSUPPORTED  `storage_dtype = INT8` without CHRONOSV_ENABLE_INT8.
+ * @retval NULL + ::CHRONOSV_ERR_UNSUPPORTED  `storage_dtype = INT8` when the library was built with `-DCHRONOSV_ENABLE_INT8=OFF` (INT8 is compiled in by default; only fires if a downstream build turned it off explicitly).
  * @note If `cfg->cold_path` points to a directory containing a previous
  *       engine's metadata, the schema (dim / dtype / metric / payload_size /
  *       ring_capacity) must match. Mismatch returns ::CHRONOSV_ERR_INVALID_ARG.
