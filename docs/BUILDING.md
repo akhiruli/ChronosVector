@@ -416,7 +416,8 @@ ChronosVector/
 ├── .gitmodules                 # eigen submodule
 ├── docs/
 │   ├── BUILDING.md             # this file
-│   └── INT8.md                 # INT8 storage: when to use + measured recall/perf
+│   ├── INT8.md                 # INT8 storage: when to use + measured recall/perf
+│   └── USE_CASES.md            # industry deep-dives, fit criteria, deployment patterns
 ├── include/chronosv/
 │   ├── chronos_vector.h        # PUBLIC — the C ABI contract
 │   ├── chronos_vector.hpp      # PUBLIC — header-only C++ wrapper

@@ -24,6 +24,8 @@ Not a general-purpose vector database. If you need HNSW / IVF / graph-index k-NN
 
 ## When to reach for ChronosVector
 
+*For a deep-dive by industry (industrial IoT, video anomaly detection, wearables, HVAC, satellite telemetry, robotics, cybersecurity, e-commerce, plus explicit non-fits) see [`docs/USE_CASES.md`](docs/USE_CASES.md).*
+
 Pick ChronosVector when **all** of these apply:
 
 - Your data is a **stream** (append rate > query rate on hot data).
@@ -178,6 +180,7 @@ examples/anomaly_stream.cpp  Walkthrough: streaming anomaly detection + metrics 
 soak/                        Long-running load + flat-RSS check
 docs/BUILDING.md             Full build / test / bench / soak guide
 docs/INT8.md                 INT8 quantized storage: when to use + measured recall/perf
+docs/USE_CASES.md            Industry deep-dives, fit criteria, deployment patterns
 docker/                      Linux verification via Docker Desktop
 third_party/eigen/           Vendored git submodule, pinned to 3.4.0
 ```
